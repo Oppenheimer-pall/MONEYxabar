@@ -1,0 +1,67 @@
+name: 🤖 Card Bot CI/CD
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  # ── 1. Test ──────────────────────────────────
+  test:
+    name: 🧪 Testlar
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Kodni yuklab olish
+        uses: actions/checkout@v4
+
+      - name: 🐍 Python o'rnatish
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: 📦 Paketlarni o'rnatish
+        run: pip install -r requirements.txt
+
+      - name: ✅ Syntax tekshirish
+        run: python -m py_compile bot.py database.py card_utils.py config.py
+
+      - name: 🔍 Import tekshirish
+        run: |
+          python -c "from card_utils import validate_card, get_card_type, mask_card, format_card_number; print('✅ card_utils OK')"
+          python -c "from database import Database; print('✅ database OK')"
+
+      - name: 💳 Karta validatsiyasini test qilish
+        run: |
+          python -c "
+          from card_utils import validate_card, get_card_type, mask_card
+
+          # Humo karta testi
+          assert get_card_type('9860123456789012') == 'Humo', 'Humo aniqlash xato'
+          # Uzcard testi
+          assert get_card_type('8600123456789012') == 'Uzcard', 'Uzcard aniqlash xato'
+          # Visa testi
+          assert get_card_type('4111111111111111') == 'Visa', 'Visa aniqlash xato'
+          # Mask testi
+          assert mask_card('8600123456789012') == '**** **** **** 9012', 'Mask xato'
+          print('✅ Barcha testlar muvaffaqiyatli!')
+          "
+
+  # ── 2. Deploy (faqat main branchda) ─────────
+  deploy:
+    name: 🚀 Railway Deploy
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: 📥 Kodni yuklab olish
+        uses: actions/checkout@v4
+
+      - name: 🚂 Railway Deploy
+        uses: bervProject/railway-deploy@main
+        with:
+          railway_token: ${{ secrets.RAILWAY_TOKEN }}
+          service: ${{ secrets.RAILWAY_SERVICE_NAME }}
